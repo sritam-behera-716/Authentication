@@ -1,4 +1,7 @@
 const app = require("./src/app");
+const connectToDatabase = require("./src/config/database");
+
+connectToDatabase();
 
 app.get("/", (req, res) => {
   res.send("Backend server is running perfectly");
