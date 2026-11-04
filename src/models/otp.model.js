@@ -22,6 +22,14 @@ const otpSchema = new mongoose.Schema(
       type: String,
       required: [true, "OTP hash is required"],
     },
+    purpose: {
+      type: String,
+      enum: {
+        values: ["REGISTRATION", "PASSWORD_RESET"],
+        message: "Purpose must be either 'REGISTRATION' or 'PASSWORD_RESET'",
+      },
+      required: [true, "Purpose is required"],
+    },
     expiresAt: {
       type: Date,
       required: [true, "Expiration time is required"],
@@ -30,6 +38,7 @@ const otpSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+otpSchema.index({ email: 1, purpose: 1 }, { expireAfterSeconds: 0 });
 otpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const otpModel = mongoose.model("otps", otpSchema);

@@ -33,6 +33,7 @@ async function register(req, res) {
     email: user.email,
     user: user._id,
     otpHash,
+    purpose: "REGISTRATION",
     expiresAt,
   });
 
@@ -54,4 +55,49 @@ async function register(req, res) {
   });
 }
 
-module.exports = { register };
+/**
+ * Verifies the email for a user
+ * 
+ *  Steps:-
+ * - Fetch otp document
+ * - Verify OTP
+ * - Update user verification status
+ * - Delete used OTP
+ * - Return response
+ */
+async function verifyEmail(req, res) {
+  const { email, otp, purpose } = req.body;
+
+  const otpRecord = await otpModel.findOne({ email, purpose });
+
+  if (!otpRecord) {
+    return res.status(404).json({ message: "OTP not found" });
+  }
+
+  if (otpRecord.expiresAt < new Date()) {
+    return res.status(400).json({ message: "OTP has expired" });
+  }
+
+  const isOtpValid = await bcrypt.compare(otp, otpRecord.otpHash);
+  if (!isOtpValid) {
+    return res.status(400).json({ message: "Invalid OTP" });
+  }
+
+  const user = await userModel.findById(otpRecord.user);
+  user.isEmailVerified = true;
+  await user.save();
+
+  await otpModel.deleteMany({ email });
+
+  res.status(200).json({
+    message: "OTP verified successfully",
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      verified: user.isEmailVerified,
+    },
+  });
+}
+
+module.exports = { register, verifyEmail };
