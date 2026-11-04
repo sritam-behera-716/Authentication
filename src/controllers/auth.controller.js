@@ -57,8 +57,8 @@ async function register(req, res) {
 
 /**
  * Verifies the email for a user
- * 
- *  Steps:-
+ *
+ * Steps:-
  * - Fetch otp document
  * - Verify OTP
  * - Update user verification status
@@ -87,7 +87,7 @@ async function verifyEmail(req, res) {
   user.isEmailVerified = true;
   await user.save();
 
-  await otpModel.deleteMany({ email });
+  await otpModel.deleteMany({ email, purpose });
 
   res.status(200).json({
     message: "OTP verified successfully",
@@ -100,4 +100,55 @@ async function verifyEmail(req, res) {
   });
 }
 
-module.exports = { register, verifyEmail };
+/**
+ * Resends an OTP for a specific purpose
+ *
+ * Steps :-
+ * - Check if the purpose is valid
+ * - Check if the user exists
+ * - Delete existing OTPs for the purpose
+ * - Create a new OTP document
+ * - Send the new OTP via email
+ * - Return response
+ */
+async function resendOtp(req, res) {
+  const { email, purpose } = req.body;
+
+  if (purpose !== "REGISTRATION") {
+    return res.status(400).json({ message: "Invalid purpose" });
+  }
+
+  const user = await userModel.findOne({ email });
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  if (user.isEmailVerified) {
+    return res.status(400).json({ message: "Email is already verified" });
+  }
+
+  await otpModel.deleteMany({ email, purpose });
+
+  const otp = generateOtp();
+  const otpHash = await bcrypt.hash(otp, 10);
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
+
+  await otpModel.create({
+    email: user.email,
+    user: user._id,
+    otpHash,
+    purpose,
+    expiresAt,
+  });
+
+  await sendEmail(
+    user.email,
+    "Resend OTP",
+    `Your new OTP is: ${otp}`,
+    otpVerificationTemplate(otp),
+  );
+
+  res.status(200).json({ message: "OTP resent successfully" });
+}
+
+module.exports = { register, verifyEmail, resendOtp };
