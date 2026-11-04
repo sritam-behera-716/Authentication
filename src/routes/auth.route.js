@@ -15,4 +15,10 @@ authRouter.post("/register", authController.register);
  */
 authRouter.post("/verify-email", authController.verifyEmail);
 
+/**
+ * Method - POST
+ * EndPoint - /api/auth/resend-otp
+ */
+authRouter.post("/resend-otp", authController.resendOtp);
+
 module.exports = authRouter;
