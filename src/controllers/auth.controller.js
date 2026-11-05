@@ -1,6 +1,9 @@
 const userModel = require("../models/user.model");
 const otpModel = require("../models/otp.model");
+const sessionModel = require("../models/session.model");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const env = require("../config/environment");
 const generateOtp = require("../utils/otp");
 const otpVerificationTemplate = require("../templates/otp-verification");
 const sendEmail = require("../services/email.service");
@@ -151,4 +154,69 @@ async function resendOtp(req, res) {
   res.status(200).json({ message: "OTP resent successfully" });
 }
 
-module.exports = { register, verifyEmail, resendOtp };
+/**
+ * Logs in a user and creates a session
+ *
+ * Steps:-
+ * - Fetch user by email
+ * - Check if email is verified
+ * - Verify password
+ * - Generate access and refresh tokens
+ * - Create a new session document
+ * - Return response with access token
+ */
+async function login(req, res) {
+  const { email, password } = req.body;
+
+  const user = await userModel.findOne({ email }).select("+password");
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  if (!user.isEmailVerified) {
+    return res.status(400).json({ message: "Email is not verified" });
+  }
+
+  const isPasswordValid = await user.comparePassword(password);
+  if (!isPasswordValid) {
+    return res.status(400).json({ message: "Invalid password" });
+  }
+
+  const refreshToken = jwt.sign({ id: user._id }, env.JWT_SECRET_KEY, {
+    expiresIn: "7d",
+  });
+
+  const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
+
+  const session = await sessionModel.create({
+    user: user._id,
+    refreshTokenHash,
+    ipAddress: req.ip,
+    userAgent: req.headers["user-agent"],
+  });
+
+  const accessToken = jwt.sign(
+    { id: user._id, sessionId: session._id },
+    env.JWT_SECRET_KEY,
+    { expiresIn: "15m" },
+  );
+
+  res.cookie("refreshToken", refreshToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "strict",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+  res.status(200).json({
+    message: "User logged in successfully",
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+    },
+    accessToken,
+  });
+}
+
+module.exports = { register, verifyEmail, resendOtp, login };
