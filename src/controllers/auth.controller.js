@@ -219,4 +219,40 @@ async function login(req, res) {
   });
 }
 
-module.exports = { register, verifyEmail, resendOtp, login };
+/**
+ * Retrieves the details of the currently authenticated user
+ *
+ * Steps:-
+ * - Extract access token from the request headers
+ * - Verify the access token
+ * - Fetch the user details from the database
+ * - Return response
+ */
+async function getMe(req, res) {
+  const accessToken = req.headers.authorization.split(" ")[1];
+
+  if (!accessToken) {
+    return res.status(401).json({ message: "Token not provided" });
+  }
+
+  try {
+    const decoded = jwt.verify(accessToken, env.JWT_SECRET_KEY);
+    if (!decoded) {
+      return res.status(401).json({ message: "Invalid token" });
+    }
+
+    const user = await userModel.findById(decoded.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({ user });
+  } catch (error) {
+    res.status(401).json({
+      message: "Unable to fetch user details",
+      error: error.message,
+    });
+  }
+}
+
+module.exports = { register, verifyEmail, resendOtp, login, getMe };
