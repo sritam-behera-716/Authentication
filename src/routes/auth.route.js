@@ -27,4 +27,10 @@ authRouter.post("/resend-otp", authController.resendOtp);
  */
 authRouter.post("/login", authController.login);
 
+/**
+ * Method - GET
+ * EndPoint - /api/auth/me
+ */
+authRouter.get("/me", authController.getMe);
+
 module.exports = authRouter;
