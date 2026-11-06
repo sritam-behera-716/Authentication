@@ -340,6 +340,48 @@ async function refreshToken(req, res) {
   }
 }
 
+/**
+ * Logs out a user current session and clearing the cookie
+ *
+ * Steps:-
+ * - Extract refresh token from cookies
+ * - Verify the refresh token
+ * - Fetch the session from the database
+ * - Revoke the session
+ * - Clear the refresh token cookie
+ * - Return response
+ */
+async function logout(req, res) {
+  const refreshToken = req.cookies.refreshToken;
+  if (!refreshToken) {
+    return res.status(401).json({ message: "Token not provided" });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, env.JWT_SECRET_KEY);
+
+    const session = await sessionModel.findOne({
+      sessionId: decoded.sessionId,
+      revoked: false,
+    });
+
+    if (!session) {
+      return res.status(400).json({ message: "Invalid session" });
+    }
+
+    session.revoked = true;
+    await session.save();
+
+    res.clearCookie("refreshToken");
+    res.status(200).json({ message: "User logged out successfully" });
+  } catch (error) {
+    res.status(400).json({
+      message: "Unable to logout user current session",
+      error: error.message,
+    });
+  }
+}
+
 module.exports = {
   register,
   verifyEmail,
@@ -347,4 +389,5 @@ module.exports = {
   login,
   getMe,
   refreshToken,
+  logout,
 };

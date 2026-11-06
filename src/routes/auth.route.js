@@ -39,4 +39,10 @@ authRouter.get("/me", authController.getMe);
  */
 authRouter.post("/refresh-token", authController.refreshToken);
 
+/**
+ * Method - POST
+ * EndPoint - /api/auth/logout
+ */
+authRouter.post("/logout", authController.logout);
+
 module.exports = authRouter;
