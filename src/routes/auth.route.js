@@ -45,4 +45,10 @@ authRouter.post("/refresh-token", authController.refreshToken);
  */
 authRouter.post("/logout", authController.logout);
 
+/**
+ * Method - POST
+ * EndPoint - /api/auth/logout-all
+ */
+authRouter.post("/logout-all", authController.logoutFromAllSessions);
+
 module.exports = authRouter;
