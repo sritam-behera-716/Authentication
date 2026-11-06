@@ -33,4 +33,10 @@ authRouter.post("/login", authController.login);
  */
 authRouter.get("/me", authController.getMe);
 
+/**
+ * Method - POST
+ * EndPoint - /api/auth/refresh-token
+ */
+authRouter.post("/refresh-token", authController.refreshToken);
+
 module.exports = authRouter;

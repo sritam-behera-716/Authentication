@@ -7,6 +7,10 @@ const sessionSchema = new mongoose.Schema(
       ref: "users",
       required: [true, "User is required"],
     },
+    sessionId: {
+      type: String,
+      required: [true, "Session ID is required"],
+    },
     refreshTokenHash: {
       type: String,
       required: [true, "Refresh token hash is required"],
@@ -26,8 +30,6 @@ const sessionSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
-
-sessionSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 }); // 7 days
 
 const Session = mongoose.model("Session", sessionSchema);
 

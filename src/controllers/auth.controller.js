@@ -1,6 +1,7 @@
 const userModel = require("../models/user.model");
 const otpModel = require("../models/otp.model");
 const sessionModel = require("../models/session.model");
+const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const env = require("../config/environment");
@@ -182,14 +183,21 @@ async function login(req, res) {
     return res.status(400).json({ message: "Invalid password" });
   }
 
-  const refreshToken = jwt.sign({ id: user._id }, env.JWT_SECRET_KEY, {
-    expiresIn: "7d",
-  });
+  const sessionId = crypto.randomUUID();
+
+  const refreshToken = jwt.sign(
+    { id: user._id, sessionId },
+    env.JWT_SECRET_KEY,
+    {
+      expiresIn: "7d",
+    },
+  );
 
   const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
 
   const session = await sessionModel.create({
     user: user._id,
+    sessionId: sessionId,
     refreshTokenHash,
     ipAddress: req.ip,
     userAgent: req.headers["user-agent"],
@@ -255,4 +263,88 @@ async function getMe(req, res) {
   }
 }
 
-module.exports = { register, verifyEmail, resendOtp, login, getMe };
+/**
+ *
+ * Refreshes the access token using a valid refresh token
+ *
+ * Steps:-
+ * - Extract refresh token from cookies
+ * - Verify the refresh token
+ * - Fetch the session from the database
+ * - Generate new access and refresh tokens
+ * - Update the session with the new refresh token hash
+ * - Return response with new access token
+ */
+async function refreshToken(req, res) {
+  const refreshToken = req.cookies.refreshToken;
+  if (!refreshToken) {
+    return res.status(401).json({ message: "Token not provided" });
+  }
+
+  try {
+    const decoded = jwt.verify(refreshToken, env.JWT_SECRET_KEY);
+
+    const session = await sessionModel.findOne({
+      sessionId: decoded.sessionId,
+      revoked: false,
+    });
+
+    if (!session) {
+      return res.status(400).json({ message: "Invalid session" });
+    }
+
+    const isRefreshTokenValid = await bcrypt.compare(
+      refreshToken,
+      session.refreshTokenHash,
+    );
+
+    if (!isRefreshTokenValid) {
+      return res.status(400).json({ message: "Invalid refresh token" });
+    }
+
+    const newAccessToken = jwt.sign(
+      { id: decoded.id, sessionId: session._id },
+      env.JWT_SECRET_KEY,
+      { expiresIn: "15m" },
+    );
+
+    const newRefreshToken = jwt.sign(
+      { id: decoded.id, sessionId: session.sessionId },
+      env.JWT_SECRET_KEY,
+      {
+        expiresIn: "7d",
+      },
+    );
+
+    const newRefreshTokenHash = await bcrypt.hash(newRefreshToken, 10);
+
+    session.refreshTokenHash = newRefreshTokenHash;
+    await session.save();
+
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(200).json({
+      message: "Access token refresh successfully",
+      accessToken: newAccessToken,
+    });
+  } catch (error) {
+    res.status(400).json({
+      message: "Unable to generate access token",
+      error: error.message,
+    });
+  }
+}
+
+module.exports = {
+  register,
+  verifyEmail,
+  resendOtp,
+  login,
+  getMe,
+  refreshToken,
+};
